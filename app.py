@@ -24,7 +24,21 @@ def inject_global_css():
       --text-muted: #9ca3af;
     }
 
-    /* Fond global : gradient semi-transparent + image */
+    /* Fond global : gradient semi-transparent + image éventuelle */
+    .stApp {
+      background:
+        radial-gradient(circle at top left,
+          rgba(15,17,32,0.92) 0,
+          rgba(2,6,23,0.94) 45%,
+          rgba(2,6,23,0.98) 100%
+        );
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      color: var(--text-main);
+    }
+
+    /* Si tu veux mettre une image de fond :
     .stApp {
       background:
         radial-gradient(circle at top left,
@@ -32,12 +46,13 @@ def inject_global_css():
           rgba(2,6,23,0.94) 45%,
           rgba(2,6,23,0.98) 100%
         ),
-        url('https://raw.githubusercontent.com/TobiB86/analyse-carbone-site-3/refs/heads/main/ChatGPT%20Image%2025%20f%C3%A9vr.%202026%2C%2015_26_20.png');
+        url('URL_DE_TON_IMAGE_ICI');
       background-size: cover;
       background-position: center;
       background-attachment: fixed;
       color: var(--text-main);
     }
+    */
 
     /* Conteneur central */
     .block-container {
@@ -124,7 +139,7 @@ def inject_global_css():
       color: var(--text-main) !important;
     }
 
-    /* Metrics (les petits blocs de chiffres) */
+    /* Metrics */
     .stMetric {
       background: rgba(15,23,42,0.95);
       border-radius: 16px;
@@ -181,12 +196,15 @@ MAX_PAGES = 20
 REQUEST_TIMEOUT = 10
 USER_AGENT = "CarbonPOCBot/0.1 (+for research & prospecting)"
 
+# Limite de ressources par page pour les HEAD requests (performance)
+MAX_RESOURCES_PER_PAGE = 40
+
 # Hypothèses pour le modèle carbone (POC)
-DEFAULT_WEIGHT_MULTIPLIER = 3.0              # pour approximer HTML + CSS + JS + images
+# (on garde ces valeurs, mais le gros changement vient du poids total de page)
+DEFAULT_WEIGHT_MULTIPLIER = 1.0              # ≈ 1 car on utilise maintenant le poids total
 DEFAULT_ENERGY_PER_GB_KWH = 0.5              # kWh consommés par Go de données
 DEFAULT_CARBON_INTENSITY_G_PER_KWH = 300.0   # gCO2/kWh (mix électrique moyen)
 
-# Repère pédagogique
 WORLD_AVG_GCO2_PER_PAGE = 0.8  # ≈ moyenne mondiale souvent citée
 
 
@@ -357,7 +375,27 @@ def analyze_text(text: str) -> dict:
 
 
 # ============================================================
-# 5. ANALYSE STRUCTURELLE D'UNE PAGE
+# 5. MESURE DU POIDS DES RESSOURCES (HEAD requests)
+# ============================================================
+
+def get_resource_size_bytes(url: str) -> int:
+    """
+    Retourne la taille de la ressource en octets via une requête HEAD.
+    Si la taille n'est pas disponible (pas de Content-Length), retourne 0.
+    """
+    headers = {"User-Agent": USER_AGENT}
+    try:
+        resp = requests.head(url, headers=headers, allow_redirects=True, timeout=REQUEST_TIMEOUT)
+        cl = resp.headers.get("Content-Length") or resp.headers.get("content-length")
+        if cl and cl.isdigit():
+            return int(cl)
+    except Exception:
+        pass
+    return 0
+
+
+# ============================================================
+# 6. ANALYSE STRUCTURELLE D'UNE PAGE + POIDS RÉEL
 # ============================================================
 
 def analyze_page(html: str, url: str) -> dict:
@@ -365,6 +403,7 @@ def analyze_page(html: str, url: str) -> dict:
     Analyse une page :
     - structure (titres, images, scripts, CSS, fonts)
     - texte + scores RSE / climat / green IT
+    - poids HTML + poids des ressources (HEAD requests)
     """
     soup = BeautifulSoup(html, "html.parser")
 
@@ -385,13 +424,15 @@ def analyze_page(html: str, url: str) -> dict:
     num_scripts = len(scripts)
     num_stylesheets = len(stylesheets)
 
+    # Taille HTML réelle
     html_bytes = len(html.encode("utf-8"))
     html_kb = round(html_bytes / 1024, 1)
 
+    # Fonts inline
     font_families = set()
     for tag in soup.find_all(style=True):
         style = tag["style"].lower()
-        match = re.search(r"font-family\\s*:\\s*([^;]+)", style)
+        match = re.search(r"font-family\s*:\s*([^;]+)", style)
         if match:
             font_families.add(match.group(1).strip())
 
@@ -399,11 +440,43 @@ def analyze_page(html: str, url: str) -> dict:
     for link in soup.find_all("link", href=True):
         href = link["href"].lower()
         if "fonts.googleapis.com" in href or "font" in href:
-            font_resources.append(link["href"])
+            font_resources.append(urljoin(url, link["href"]))
 
     num_inline_fonts = len(font_families)
     font_resources = list(set(font_resources))
 
+    # ---- Récupération des ressources principales (HEAD pour le poids) ----
+    resource_urls = []
+
+    for img in images:
+        src = img.get("src")
+        if src:
+            resource_urls.append(urljoin(url, src))
+
+    for s in scripts:
+        src = s.get("src")
+        if src:
+            resource_urls.append(urljoin(url, src))
+
+    for l in stylesheets:
+        href = l.get("href")
+        if href:
+            resource_urls.append(urljoin(url, href))
+
+    # on déduplique
+    resource_urls = list(dict.fromkeys(resource_urls))
+
+    # on limite pour ne pas exploser les requêtes
+    resource_urls = resource_urls[:MAX_RESOURCES_PER_PAGE]
+
+    total_res_bytes = 0
+    for rurl in resource_urls:
+        total_res_bytes += get_resource_size_bytes(rurl)
+
+    resources_kb = round(total_res_bytes / 1024, 1)
+    total_kb = round(html_kb + resources_kb, 1)
+
+    # Texte + scores
     text = extract_text(html)
     text_scores = analyze_text(text)
 
@@ -411,6 +484,8 @@ def analyze_page(html: str, url: str) -> dict:
         "url": url,
         "title": title,
         "html_kb": html_kb,
+        "resources_kb": resources_kb,
+        "total_kb": total_kb,
         "num_images": num_images,
         "num_scripts": num_scripts,
         "num_stylesheets": num_stylesheets,
@@ -426,13 +501,13 @@ def analyze_page(html: str, url: str) -> dict:
 
 
 # ============================================================
-# 6. ANALYSE COMPLÈTE D'UN SITE
+# 7. ANALYSE COMPLÈTE D'UN SITE
 # ============================================================
 
 def analyze_website(url: str, max_pages: int = MAX_PAGES) -> dict:
     """
     Crawl léger + agrégation des scores RSE/climat/green IT
-    + stats structurelles + info hébergeur.
+    + stats structurelles + info hébergeur + poids réel des ressources.
     """
     base_url = normalize_base_url(url)
     html_home = fetch_page(base_url)
@@ -489,8 +564,13 @@ def analyze_website(url: str, max_pages: int = MAX_PAGES) -> dict:
     global_green_it_score = max(p["green_it_score"] for p in pages_data)
 
     pages_scanned = len(pages_data)
+
     total_html_kb = sum(p["html_kb"] for p in pages_data)
+    total_res_kb = sum(p["resources_kb"] for p in pages_data)
+    total_page_kb = sum(p["total_kb"] for p in pages_data)
+
     avg_html_kb = round(total_html_kb / pages_scanned, 1) if pages_scanned > 0 else 0.0
+    avg_total_kb = round(total_page_kb / pages_scanned, 1) if pages_scanned > 0 else 0.0
 
     total_images = sum(p["num_images"] for p in pages_data)
     total_scripts = sum(p["num_scripts"] for p in pages_data)
@@ -528,8 +608,8 @@ def analyze_website(url: str, max_pages: int = MAX_PAGES) -> dict:
         )
 
     summary_parts.append(
-        f"Crawl de {pages_scanned} pages pour {total_html_kb:.1f} Ko de HTML "
-        f"(moyenne {avg_html_kb:.1f} Ko/page)."
+        f"Crawl de {pages_scanned} pages pour {total_page_kb:.1f} Ko de données "
+        f"(HTML + ressources, moyenne {avg_total_kb:.1f} Ko/page)."
     )
     summary = " ".join(summary_parts)
 
@@ -548,7 +628,10 @@ def analyze_website(url: str, max_pages: int = MAX_PAGES) -> dict:
         "total_carbon_hits": total_carbon_hits,
         "total_green_it_hits": total_green_it_hits,
         "total_html_kb": total_html_kb,
+        "total_resources_kb": total_res_kb,
+        "total_page_kb": total_page_kb,
         "avg_html_kb": avg_html_kb,
+        "avg_total_kb": avg_total_kb,
         "total_images": total_images,
         "total_scripts": total_scripts,
         "total_stylesheets": total_stylesheets,
@@ -569,7 +652,7 @@ def analyze_website(url: str, max_pages: int = MAX_PAGES) -> dict:
 
 
 # ============================================================
-# 7. ESTIMATION CARBONE (POC)
+# 8. ESTIMATION CARBONE (POC) BASÉE SUR POIDS TOTAL
 # ============================================================
 
 def estimate_site_carbon(
@@ -585,18 +668,22 @@ def estimate_site_carbon(
     - kgCO₂/mois
     - kgCO₂/an
 
-    en ajustant si l'hébergeur est 'vert'.
+    en se basant sur le poids total moyen d'une page (HTML + ressources).
     """
+    avg_total_kb = site_result.get("avg_total_kb")
     avg_html_kb = site_result.get("avg_html_kb")
-    if avg_html_kb is None:
-        raise ValueError("Le résultat du site ne contient pas 'avg_html_kb'.")
 
-    avg_kb_per_page = avg_html_kb * weight_multiplier
+    if avg_total_kb and avg_total_kb > 0:
+        avg_kb_per_page = avg_total_kb
+    elif avg_html_kb:
+        avg_kb_per_page = avg_html_kb * weight_multiplier
+    else:
+        raise ValueError("Impossible de déterminer un poids moyen de page.")
+
     gb_per_view = avg_kb_per_page / (1024 * 1024)
 
     hosting_green = site_result.get("hosting_green", None)
     if hosting_green is True:
-        # hypothèse : 70 % de l'énergie est renouvelable
         green_factor = 0.7
     else:
         green_factor = 0.0
@@ -617,7 +704,6 @@ def estimate_site_carbon(
         "yearly_kgco2": round(yearly_kgco2, 2),
         "assumptions": {
             "monthly_page_views": monthly_page_views,
-            "weight_multiplier": weight_multiplier,
             "energy_per_gb_kwh": energy_per_gb_kwh,
             "carbon_intensity_g_per_kwh": carbon_intensity_g_per_kwh,
             "hosting_green": hosting_green,
@@ -627,7 +713,7 @@ def estimate_site_carbon(
 
 
 # ============================================================
-# 8. INTERFACE STREAMLIT
+# 9. INTERFACE STREAMLIT
 # ============================================================
 
 st.set_page_config(
@@ -735,11 +821,11 @@ with tab1:
                         "Total HTML (Ko)", round(site_result["total_html_kb"], 1)
                     )
                 with col5:
-                    st.metric("Taille moyenne page (Ko)", site_result["avg_html_kb"])
-                    st.metric("Images totales", site_result["total_images"])
+                    st.metric("Total ressources (Ko)", round(site_result["total_resources_kb"], 1))
+                    st.metric("Taille moyenne totale (Ko)", site_result["avg_total_kb"])
                 with col6:
+                    st.metric("Images totales", site_result["total_images"])
                     st.metric("Scripts JS", site_result["total_scripts"])
-                    st.metric("Feuilles de style", site_result["total_stylesheets"])
 
                 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -750,7 +836,7 @@ with tab1:
 
                 st.write(
                     f"Sur la base d'un poids moyen estimé de **{carbon['avg_kb_per_page']} Ko/page** "
-                    f"(HTML + CSS + JS + images) et d'environ **{monthly_views} pages vues / mois** :"
+                    f"(HTML + ressources) et d'environ **{monthly_views} pages vues / mois** :"
                 )
 
                 col7, col8, col9 = st.columns(3)
@@ -789,6 +875,8 @@ with tab1:
                             [
                                 "url",
                                 "html_kb",
+                                "resources_kb",
+                                "total_kb",
                                 "num_images",
                                 "num_scripts",
                                 "num_stylesheets",
@@ -888,7 +976,8 @@ with tab2:
                                 "url": site_res["url"],
                                 "domain": site_res["domain"],
                                 "pages_scanned": site_res["pages_scanned"],
-                                "avg_html_kb": site_res["avg_html_kb"],
+                                "avg_total_kb": site_res["avg_total_kb"],
+                                "total_page_kb": site_res["total_page_kb"],
                                 "total_images": site_res["total_images"],
                                 "global_rse_score": site_res["global_rse_score"],
                                 "global_carbon_score": site_res["global_carbon_score"],
