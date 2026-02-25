@@ -22,7 +22,7 @@ def inject_global_css():
 
     /* Si tu veux utiliser une image de planète en fond :
     .stApp {
-        background-image: url('https://raw.githubusercontent.com/TON_USER/TON_REPO/main/assets/background-planet.jpg');
+        background-image: url('https://raw.githubusercontent.com/TobiB86/analyse-carbone-site-3/refs/heads/main/ChatGPT%20Image%2025%20f%C3%A9vr.%202026%2C%2015_26_20.png');
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
