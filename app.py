@@ -14,104 +14,129 @@ import streamlit as st
 
 def inject_global_css():
     css = """
-    /* Background global en dégradé sombre */
+    :root {
+      --bg-main: #020617;
+      --bg-card: rgba(15,23,42,0.96);
+      --border-subtle: rgba(148,163,184,0.35);
+      --accent-green: #22c55e;
+      --accent-teal: #2dd4bf;
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+    }
+
+    /* Fond global : gradient semi-transparent + image */
     .stApp {
-        background: radial-gradient(circle at top left, #0f172a 0, #020617 40%, #020617 100%);
-        color: #e5e7eb;
+      background:
+        radial-gradient(circle at top left,
+          rgba(15,17,32,0.92) 0,
+          rgba(2,6,23,0.94) 45%,
+          rgba(2,6,23,0.98) 100%
+        ),
+        url('https://raw.githubusercontent.com/TobiB86/analyse-carbone-site-3/refs/heads/main/ChatGPT%20Image%2025%20f%C3%A9vr.%202026%2C%2015_26_20.png');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      color: var(--text-main);
     }
 
-    /* Si tu veux utiliser une image de planète en fond :
-    .stApp {
-        background-image: url('https://raw.githubusercontent.com/TobiB86/analyse-carbone-site-3/refs/heads/main/ChatGPT%20Image%2025%20f%C3%A9vr.%202026%2C%2015_26_20.png');
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        color: #e5e7eb;
-    }
-    */
-
-    /* Titres */
-    h1 {
-        font-weight: 700 !important;
-        letter-spacing: 0.03em;
+    /* Conteneur central */
+    .block-container {
+       padding-top: 3rem;
+       padding-bottom: 3rem;
+       max-width: 900px;
     }
 
-    h2, h3, h4 {
-        color: #e5e7eb !important;
+    /* Titres & textes */
+    h1, h2, h3, h4 {
+      color: var(--text-main) !important;
+    }
+    p, label, span, .stMarkdown, .stCaption {
+      color: var(--text-main);
+    }
+    .stCaption, .markdown-text-container p {
+      color: var(--text-muted);
     }
 
     /* Cartes glassmorphism */
     .glass-card {
-        background: rgba(15, 23, 42, 0.9);
-        border-radius: 18px;
-        padding: 18px 20px;
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
-        backdrop-filter: blur(12px);
+      background: var(--bg-card);
+      border-radius: 18px;
+      padding: 18px 20px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+      backdrop-filter: blur(14px);
     }
 
     /* Formulaire */
     .stForm {
-        background: rgba(15, 23, 42, 0.9);
-        border-radius: 16px;
-        padding: 20px 22px;
-        border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(15,23,42,0.95);
+      border-radius: 18px;
+      padding: 20px 22px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 14px 35px rgba(0,0,0,0.5);
     }
 
     /* Inputs */
     .stTextInput > div > div > input,
     .stNumberInput input {
-        background: rgba(15,23,42,0.9) !important;
-        border-radius: 999px !important;
-        border: 1px solid rgba(148,163,184,0.5) !important;
-        color: #e5e7eb !important;
+      background: #020617 !important;
+      border-radius: 999px !important;
+      border: 1px solid var(--border-subtle) !important;
+      color: var(--text-main) !important;
+      padding-inline: 1rem !important;
+    }
+    .stTextInput > div > div > input::placeholder {
+      color: #6b7280 !important;
     }
 
     /* Boutons */
     .stButton>button {
-        background: linear-gradient(135deg, #22c55e, #2dd4bf);
-        color: #020617;
-        border-radius: 999px;
-        border: none;
-        padding: 0.5rem 1.4rem;
-        font-weight: 600;
-        box-shadow: 0 12px 30px rgba(34, 197, 94, 0.35);
+      background: linear-gradient(135deg, var(--accent-green), var(--accent-teal));
+      color: #020617;
+      border-radius: 999px;
+      border: none;
+      padding: 0.55rem 1.6rem;
+      font-weight: 600;
+      box-shadow: 0 12px 30px rgba(34, 197, 94, 0.35);
     }
     .stButton>button:hover {
-        filter: brightness(1.07);
-        box-shadow: 0 16px 40px rgba(34, 197, 94, 0.4);
-    }
-
-    /* Tableau */
-    .stDataFrame {
-        border-radius: 16px;
-        overflow: hidden;
-        background: rgba(15, 23, 42, 0.95) !important;
+      filter: brightness(1.07);
+      box-shadow: 0 16px 40px rgba(34, 197, 94, 0.45);
     }
 
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 1rem;
+      gap: 1rem;
     }
     .stTabs [data-baseweb="tab"] {
-        padding: 0.4rem 1rem;
-        border-radius: 999px;
-        background-color: rgba(15,23,42,0.6);
-        color: #9ca3af;
-        border: 1px solid transparent;
+      padding: 0.35rem 1.1rem;
+      border-radius: 999px;
+      background-color: rgba(15,23,42,0.7);
+      color: var(--text-muted);
+      border: 1px solid transparent;
     }
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(45,212,191,0.15));
-        border-color: rgba(34,197,94,0.7);
-        color: #e5e7eb !important;
+      background: linear-gradient(135deg,
+        rgba(34,197,94,0.18),
+        rgba(45,212,191,0.18)
+      );
+      border-color: rgba(34,197,94,0.8);
+      color: var(--text-main) !important;
     }
 
-    /* Metrics */
+    /* Metrics (les petits blocs de chiffres) */
     .stMetric {
-        background: rgba(15, 23, 42, 0.95);
-        border-radius: 16px;
-        padding: 0.5rem 0.75rem;
-        border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15,23,42,0.95);
+      border-radius: 16px;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid var(--border-subtle);
+    }
+
+    /* Tableau de DataFrame */
+    .stDataFrame {
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(15,23,42,0.96) !important;
     }
     """
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
