@@ -4,3 +4,4 @@ beautifulsoup4
 tldextract
 pandas
 xlsxwriter
+supabase-py
