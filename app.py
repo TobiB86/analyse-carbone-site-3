@@ -6,6 +6,7 @@ import pandas as pd
 from urllib.parse import urljoin, urlparse
 from io import BytesIO
 
+from supabase_client import list_sites, add_site
 import streamlit as st
 
 # ============================================================
@@ -1035,3 +1036,17 @@ with tab2:
                     "Pour les analyses batch, seuls des résultats chiffrés sont affichés. "
                     "Aucun commentaire détaillé par site n'est généré pour éviter un rapport trop volumineux."
                 )
+st.sidebar.header("🔌 Test Supabase")
+
+if st.sidebar.button("Ajouter un site de test"):
+    site = add_site(
+        name="Site de test",
+        url="https://www.exemple.com",
+        siret="12345678901234",
+        traffic_mensuel=10000,
+        categorie="Test"
+    )
+    st.sidebar.write("Site ajouté :", site)
+
+sites = list_sites()
+st.sidebar.write("Sites en base :", sites)
